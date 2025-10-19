@@ -4,7 +4,6 @@ import torch.nn.functional as F
 from torch.nn import LayerNorm
 
 
-
 class DropPath(nn.Module):
     """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks)."""
     def __init__(self, drop_prob=None):
@@ -15,9 +14,9 @@ class DropPath(nn.Module):
         if self.drop_prob == 0. or not self.training:
             return x
         keep_prob = 1 - self.drop_prob
-        shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # work with diff dim tensors, not just 2D ConvNets
+        shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # Works with tensors of different dimensions, not just 2D ConvNets
         random_tensor = keep_prob + torch.rand(shape, dtype=x.dtype, device=x.device)
-        random_tensor.floor_()  # binarize
+        random_tensor.floor_()  # Binarize
         output = x.div(keep_prob) * random_tensor
         return output
 
@@ -27,13 +26,13 @@ class ConvNeXtBlock(nn.Module):
     (1) DwConv -> LayerNorm (channels_first) -> 1x1 Conv -> GELU -> 1x1 Conv; all in (N, C, H, W)
     (2) DwConv -> Permute to (N, H, W, C); LayerNorm (channels_last) -> Linear -> GELU -> Linear; Permute back
     
-    We use (2) as we find it slightly faster in PyTorch
+    We use (2) as we find it slightly faster in PyTorch.
     """
     def __init__(self, dim, drop_path=0., layer_scale_init_value=1e-6):
         super().__init__()
-        self.dwconv = nn.Conv2d(dim, dim, kernel_size=7, padding=3, groups=dim)  # depthwise conv
+        self.dwconv = nn.Conv2d(dim, dim, kernel_size=7, padding=3, groups=dim)  # Depthwise convolution
         self.norm = LayerNorm(dim, eps=1e-6)
-        self.pwconv1 = nn.Linear(dim, 4 * dim)  # pointwise/1x1 convs, implemented with linear layers
+        self.pwconv1 = nn.Linear(dim, 4 * dim)  # Pointwise/1x1 convolutions, implemented with linear layers
         self.act = nn.GELU()
         self.pwconv2 = nn.Linear(4 * dim, dim)
         self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((dim)), 
@@ -57,23 +56,23 @@ class ConvNeXtBlock(nn.Module):
 
 
 class ConvNeXt(nn.Module):
-    """ConvNeXt model for medical image classification
+    """ConvNeXt model for medical image classification.
     
     Args:
-        in_chans (int): Number of input image channels. Default: 1 (for grayscale medical images)
-        num_classes (int): Number of classes for classification head. Default: 2 (AD vs NC)
-        depths (tuple(int)): Number of blocks at each stage. Default: [3, 3, 9, 3]
-        dims (tuple(int)): Feature dimension at each stage. Default: [96, 192, 384, 768]
+        in_chans (int): Number of input image channels. Default: 1 (for grayscale medical images).
+        num_classes (int): Number of classes for classification head. Default: 2 (e.g., AD vs NC).
+        depths (tuple(int)): Number of blocks at each stage. Default: [3, 3, 9, 3].
+        dims (tuple(int)): Feature dimension at each stage. Default: [96, 192, 384, 768].
         drop_path_rate (float): Stochastic depth rate. Default: 0.
-        layer_scale_init_value (float): Init value for Layer Scale. Default: 1e-6.
-        head_init_scale (float): Init scaling value for classifier weights and biases. Default: 1.
+        layer_scale_init_value (float): Initial value for Layer Scale. Default: 1e-6.
+        head_init_scale (float): Initial scaling value for classifier weights and biases. Default: 1.
     """
     def __init__(self, in_chans=1, num_classes=2, 
                  depths=[3, 3, 9, 3], dims=[96, 192, 384, 768], 
                  drop_path_rate=0., layer_scale_init_value=1e-6, head_init_scale=1.):
         super().__init__()
 
-        self.downsample_layers = nn.ModuleList()  # stem and 3 intermediate downsampling conv layers
+        self.downsample_layers = nn.ModuleList()  # Stem and 3 intermediate downsampling conv layers
         stem = nn.Sequential(
             nn.Conv2d(in_chans, dims[0], kernel_size=4, stride=2),
             LayerNorm(dims[0], eps=1e-6, data_format="channels_first")
@@ -98,7 +97,7 @@ class ConvNeXt(nn.Module):
             self.stages.append(stage)
             cur += depths[i]
 
-        self.norm = nn.LayerNorm(dims[-1], eps=1e-6)  # final norm layer
+        self.norm = nn.LayerNorm(dims[-1], eps=1e-6)  # Final normalization layer
         self.head = nn.Linear(dims[-1], num_classes)
 
         self.apply(self._init_weights)
@@ -114,7 +113,7 @@ class ConvNeXt(nn.Module):
         for i in range(4):
             x = self.downsample_layers[i](x)
             x = self.stages[i](x)
-        return self.norm(x.mean([-2, -1]))  # global average pooling, (N, C, H, W) -> (N, C)
+        return self.norm(x.mean([-2, -1]))  # Global average pooling, (N, C, H, W) -> (N, C)
 
     def forward(self, x):
         x = self.forward_features(x)
@@ -122,7 +121,7 @@ class ConvNeXt(nn.Module):
         return x
 
 
-# LayerNorm支持不同的数据格式
+# LayerNorm supporting different data formats
 class LayerNorm(nn.Module):
     """LayerNorm that supports two data formats: channels_last (default) or channels_first. 
     The ordering of the dimensions in the inputs. channels_last corresponds to inputs with 
@@ -150,63 +149,63 @@ class LayerNorm(nn.Module):
             return x
 
 
-# 预定义的模型配置
+# Predefined model configurations
 def convnext_tiny(num_classes=2, in_chans=1, **kwargs):
-    """ConvNeXt-Tiny model for medical imaging"""
+    """ConvNeXt-Tiny model for medical imaging."""
     model = ConvNeXt(depths=[3, 3, 9, 3], dims=[96, 192, 384, 768], 
                      num_classes=num_classes, in_chans=in_chans, **kwargs)
     return model
 
 
 def convnext_small(num_classes=2, in_chans=1, **kwargs):
-    """ConvNeXt-Small model for medical imaging"""
+    """ConvNeXt-Small model for medical imaging."""
     model = ConvNeXt(depths=[3, 3, 27, 3], dims=[96, 192, 384, 768], 
                      num_classes=num_classes, in_chans=in_chans, **kwargs)
     return model
 
 
 def convnext_base(num_classes=2, in_chans=1, **kwargs):
-    """ConvNeXt-Base model for medical imaging"""
+    """ConvNeXt-Base model for medical imaging."""
     model = ConvNeXt(depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024], 
                      num_classes=num_classes, in_chans=in_chans, **kwargs)
     return model
 
 
-# 用于阿兹海默病分类的轻量级模型
+# Lightweight model for Alzheimer's disease classification
 def convnext_micro(num_classes=2, in_chans=1, **kwargs):
-    """ConvNeXt-Micro: 轻量级模型，适合医学图像分类"""
+    """ConvNeXt-Micro: Lightweight model suitable for medical image classification."""
     model = ConvNeXt(depths=[2, 2, 6, 2], dims=[64, 128, 256, 512], 
                      num_classes=num_classes, in_chans=in_chans, **kwargs)
     return model
 
 
-# 测试函数
+# Test function
 def test_model():
-    """测试模型是否正常工作"""
+    """Test if the model works correctly."""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    # 创建模型
+    # Create the model
     model = convnext_tiny(num_classes=2, in_chans=1).to(device)
     
-    # 创建测试输入 (batch_size=4, channels=1, height=224, width=224)
+    # Create test input (batch_size=4, channels=1, height=224, width=224)
     x = torch.randn(4, 1, 224, 224).to(device)
     
-    # 前向传播
+    # Forward pass
     with torch.no_grad():
         output = model(x)
     
-    print(f"输入形状: {x.shape}")
-    print(f"输出形状: {output.shape}")
-    print(f"模型参数数量: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
+    print(f"Input shape: {x.shape}")
+    print(f"Output shape: {output.shape}")
+    print(f"Number of model parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
     
     return model
 
 
 if __name__ == "__main__":
-    # 测试模型
+    # Test the model
     model = test_model()
     
-    # 显示不同模型的参数量
+    # Display the number of parameters for different models
     models = {
         'ConvNeXt-Micro': convnext_micro(),
         'ConvNeXt-Tiny': convnext_tiny(),
@@ -214,8 +213,8 @@ if __name__ == "__main__":
         'ConvNeXt-Base': convnext_base()
     }
     
-    print("\n模型参数对比:")
+    print("\nModel parameter comparison:")
     print("-" * 40)
     for name, model in models.items():
         params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        print(f"{name}: {params:,} 参数")
+        print(f"{name}: {params:,} parameters")
