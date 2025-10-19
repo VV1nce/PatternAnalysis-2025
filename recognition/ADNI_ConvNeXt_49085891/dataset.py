@@ -5,12 +5,12 @@ import os
 from PIL import Image
 
 
-# 数据路径（请替换为你的实际路径）
+# Data paths (replace with your actual paths)
 train_data_path = 'ADNI/AD_NC/train'  
 test_data_path = 'ADNI/AD_NC/test'      
 
 
-# dataset.py
+# Data augmentation and preprocessing for training
 train_transform = transforms.Compose([
     transforms.Resize(256, antialias=True),
     transforms.RandomResizedCrop(256, scale=(0.8, 1.0)),
@@ -18,10 +18,9 @@ train_transform = transforms.Compose([
     transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.116], std=[0.225]),
-
 ])
 
-# this for validation and test
+# Data preprocessing for validation and testing
 test_transform = transforms.Compose([
     transforms.Resize(256, antialias=True),
     transforms.CenterCrop(256),
@@ -31,22 +30,22 @@ test_transform = transforms.Compose([
 
 def calculate_mean_std(loader):
     """
-    计算数据集的均值和标准差
+    Calculate the mean and standard deviation of a dataset.
     """
     mean = 0.0
     std = 0.0
     total_samples = 0
 
     for images, _ in loader:
-        # get
-        batch_samples = images.size(0)  # 当前批次的样本数
+        # Get the number of samples in the current batch
+        batch_samples = images.size(0)
         total_samples += batch_samples
 
-        # 计算当前批次的均值和标准差
+        # Calculate the mean and standard deviation for the current batch
         mean += images.mean([0, 2, 3]) * batch_samples
         std += images.std([0, 2, 3]) * batch_samples
 
-    # 计算全局均值和标准差
+    # Calculate the global mean and standard deviation
     mean /= total_samples
     std /= total_samples
 
@@ -69,12 +68,11 @@ class CustomImageDataset(Dataset):
             class_idx = self.class_to_idx[class_name]
             class_dir = os.path.join(root, class_name)
             for file_name in sorted(os.listdir(class_dir)):
-                # Ensure we are only picking up image files (simple check)
+                # Ensure we are only picking up image files 
                 if file_name.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
                     path = os.path.join(class_dir, file_name)
                     item = (path, class_idx)
                     self.samples.append(item)
-
 
     def __len__(self):
         """
@@ -87,28 +85,28 @@ class CustomImageDataset(Dataset):
         Returns a single sample from the dataset.
         """
         img_path, label = self.samples[idx]
-        image = Image.open(img_path).convert("L")  
+        image = Image.open(img_path).convert("L")  # Convert to grayscale
         if self.transform:
             image = self.transform(image)
         return image, label
 
-# ==================== 预配置的数据加载器 ====================
+# ==================== Preconfigured Data Loaders ====================
 
-# Create dataset
+# Create datasets
 train_dataset = CustomImageDataset(root=train_data_path, transform=train_transform)
 test_dataset = CustomImageDataset(root=test_data_path, transform=test_transform)
 
-# 配置参数
+# Configuration parameters
 BATCH_SIZE = 64
 NUM_WORKERS = 0
 
-# 创建数据加载器
+# Create data loaders
 train_loader = DataLoader(
     train_dataset, 
     batch_size=BATCH_SIZE, 
     shuffle=True, 
     num_workers=NUM_WORKERS,
-    pin_memory=False  # 加速GPU传输
+    pin_memory=False  # Accelerates GPU transfer
 )
 
 test_loader = DataLoader(
@@ -119,10 +117,10 @@ test_loader = DataLoader(
     pin_memory=False
 )
 
-# ==================== 便捷函数 ====================
+# ==================== Utility Functions ====================
 
 def get_data_info():
-    """返回数据集信息"""
+    """Returns dataset information."""
     info = {
         'num_classes': len(train_dataset.classes),
         'classes': train_dataset.classes,
@@ -134,30 +132,30 @@ def get_data_info():
     return info
 
 def print_data_info():
-    """打印数据集信息"""
+    """Prints dataset information."""
     info = get_data_info()
     print("=" * 50)
-    print("数据集信息:")
-    print(f"类别数: {info['num_classes']}")
-    print(f"类别名称: {info['classes']}")
-    print(f"训练集样本数: {info['train_samples']}")
-    print(f"测试集样本数: {info['test_samples']}")
-    print(f"批次大小: {info['batch_size']}")
+    print("Dataset Information:")
+    print(f"Number of classes: {info['num_classes']}")
+    print(f"Class names: {info['classes']}")
+    print(f"Number of training samples: {info['train_samples']}")
+    print(f"Number of testing samples: {info['test_samples']}")
+    print(f"Batch size: {info['batch_size']}")
     print("=" * 50)
 
 def get_sample_batch():
-    """获取一个样本批次用于测试"""
+    """Fetches a sample batch for testing."""
     for images, labels in train_loader:
         return images, labels
     
 
-
 def compute_mean_std(root):
     """
-    计算数据集的均值和标准差
-    root: 数据集根目录，包含类别子文件夹
+    Compute the mean and standard deviation of a dataset.
+    Args:
+        root: Root directory of the dataset, containing class subdirectories.
     """
-    tf = transforms.ToTensor()  # 将图像转换为张量
+    tf = transforms.ToTensor()  # Convert images to tensors
     s1, s2, n = 0.0, 0.0, 0
     for cls in os.listdir(root):
         cls_path = os.path.join(root, cls)
@@ -166,26 +164,26 @@ def compute_mean_std(root):
         for img_name in os.listdir(cls_path):
             img_path = os.path.join(cls_path, img_name)
             if img_name.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
-                img = Image.open(img_path).convert('L')  # 转为灰度图像
-                img_tensor = tf(img)  # 转为张量
-                s1 += img_tensor.mean().item()  # 累加均值
-                s2 += img_tensor.pow(2).mean().item()  # 累加平方均值
+                img = Image.open(img_path).convert('L')  # Convert to grayscale
+                img_tensor = tf(img)  # Convert to tensor
+                s1 += img_tensor.mean().item()  # Accumulate mean
+                s2 += img_tensor.pow(2).mean().item()  # Accumulate squared mean
                 n += 1
     mean = s1 / n
     std = (s2 / n - mean**2)**0.5
     return mean, std
     
-    # ==================== initialise ====================
+# ==================== Main Execution ====================
 if __name__ == "__main__":
 
     print_data_info()
     
-    # load test data
+    # Load test data
     images, labels = get_sample_batch()
     mean, std = compute_mean_std(train_data_path)
-    print(f"训练集均值: {mean:.3f} 训练集标准差: {std:.3f}")
+    print(f"Training set mean: {mean:.3f}, Training set std: {std:.3f}")
     mean, std = compute_mean_std(test_data_path)
-    print(f"测试集均值: {mean:.3f} 测试集 标准差: {std:.3f}")
-    print(f"样本图像形状: {images.shape}")
-    print(f"样本标签形状: {labels.shape}")
-    print(f"图像数据范围: {images.min():.3f} 到 {images.max():.3f}")
+    print(f"Testing set mean: {mean:.3f}, Testing set std: {std:.3f}")
+    print(f"Sample image shape: {images.shape}")
+    print(f"Sample label shape: {labels.shape}")
+    print(f"Image data range: {images.min():.3f} to {images.max():.3f}")
