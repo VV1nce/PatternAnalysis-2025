@@ -1,19 +1,18 @@
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, Subset
 from torchvision import transforms
 import os
 from PIL import Image
+import random
 
-
-# Data paths (replace with your actual paths)
+# File paths
 train_data_path = 'ADNI/AD_NC/train'  
 test_data_path = 'ADNI/AD_NC/test'      
 
-
-# Data augmentation and preprocessing for training
+# Data augmentation
 train_transform = transforms.Compose([
-    transforms.Resize(256, antialias=True),
-    transforms.RandomResizedCrop(256, scale=(0.8, 1.0)),
+    transforms.Resize(224),
+    transforms.ColorJitter(brightness=0.2, contrast=0.2),
     transforms.RandomRotation(15),
     transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
     transforms.ToTensor(),
@@ -24,6 +23,10 @@ train_transform = transforms.Compose([
 test_transform = transforms.Compose([
     transforms.Resize(256, antialias=True),
     transforms.CenterCrop(256),
+
+val_test_transform = transforms.Compose([
+    transforms.Resize(224),
+    transforms.CenterCrop(224),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.117], std=[0.226])
 ])
@@ -68,7 +71,7 @@ class CustomImageDataset(Dataset):
             class_idx = self.class_to_idx[class_name]
             class_dir = os.path.join(root, class_name)
             for file_name in sorted(os.listdir(class_dir)):
-                # Ensure we are only picking up image files 
+                # Ensure we are only picking up image files (simple check)
                 if file_name.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
                     path = os.path.join(class_dir, file_name)
                     item = (path, class_idx)
@@ -85,28 +88,52 @@ class CustomImageDataset(Dataset):
         Returns a single sample from the dataset.
         """
         img_path, label = self.samples[idx]
-        image = Image.open(img_path).convert("L")  # Convert to grayscale
+        image = Image.open(img_path).convert("L")  
         if self.transform:
             image = self.transform(image)
         return image, label
 
-# ==================== Preconfigured Data Loaders ====================
-
-# Create datasets
-train_dataset = CustomImageDataset(root=train_data_path, transform=train_transform)
-test_dataset = CustomImageDataset(root=test_data_path, transform=test_transform)
-
+# ==================== DataLoader Configuration ====================
 # Configuration parameters
-BATCH_SIZE = 64
-NUM_WORKERS = 0
+BATCH_SIZE = 16
+NUM_WORKERS = 4
+VAL_SPLIT = 0.2  # Validation set proportion of training set
 
-# Create data loaders
+# Create the full training dataset
+full_train_dataset = CustomImageDataset(root=train_data_path, transform=train_transform)
+
+# Split the training set into training and validation
+train_size = int((1 - VAL_SPLIT) * len(full_train_dataset))
+val_size = len(full_train_dataset) - train_size
+train_indices, val_indices = torch.utils.data.random_split(
+    range(len(full_train_dataset)), [train_size, val_size], generator=torch.Generator().manual_seed(42)
+)
+
+# Create subsets
+train_dataset = Subset(full_train_dataset, train_indices)
+val_dataset = Subset(full_train_dataset, val_indices)
+
+# Apply different transform for validation set (no data augmentation)
+val_dataset.dataset.transform = val_test_transform
+
+# Test dataset
+test_dataset = CustomImageDataset(root=test_data_path, transform=val_test_transform)
+
+# Create DataLoaders
 train_loader = DataLoader(
     train_dataset, 
     batch_size=BATCH_SIZE, 
     shuffle=True, 
     num_workers=NUM_WORKERS,
-    pin_memory=False  # Accelerates GPU transfer
+    pin_memory=True  
+)
+
+val_loader = DataLoader(
+    val_dataset, 
+    batch_size=BATCH_SIZE, 
+    shuffle=False, 
+    num_workers=NUM_WORKERS,
+    pin_memory=True
 )
 
 test_loader = DataLoader(
@@ -114,48 +141,49 @@ test_loader = DataLoader(
     batch_size=BATCH_SIZE, 
     shuffle=False, 
     num_workers=NUM_WORKERS,
-    pin_memory=False
+    pin_memory=True
 )
 
-# ==================== Utility Functions ====================
+# ==================== Dataset test Functions ====================
 
 def get_data_info():
-    """Returns dataset information."""
+    """Return dataset information"""
     info = {
-        'num_classes': len(train_dataset.classes),
-        'classes': train_dataset.classes,
-        'class_to_idx': train_dataset.class_to_idx,
+        'num_classes': len(full_train_dataset.classes),
+        'classes': full_train_dataset.classes,
+        'class_to_idx': full_train_dataset.class_to_idx,
         'train_samples': len(train_dataset),
+        'val_samples': len(val_dataset),
         'test_samples': len(test_dataset),
         'batch_size': BATCH_SIZE
     }
     return info
 
 def print_data_info():
-    """Prints dataset information."""
+    """Print dataset information"""
     info = get_data_info()
     print("=" * 50)
     print("Dataset Information:")
-    print(f"Number of classes: {info['num_classes']}")
-    print(f"Class names: {info['classes']}")
-    print(f"Number of training samples: {info['train_samples']}")
-    print(f"Number of testing samples: {info['test_samples']}")
-    print(f"Batch size: {info['batch_size']}")
+    print(f"Number of Classes: {info['num_classes']}")
+    print(f"Class Names: {info['classes']}")
+    print(f"Training Samples: {info['train_samples']}")
+    print(f"Validation Samples: {info['val_samples']}")
+    print(f"Test Samples: {info['test_samples']}")
+    print(f"Batch Size: {info['batch_size']}")
     print("=" * 50)
 
 def get_sample_batch():
-    """Fetches a sample batch for testing."""
+    """Get a sample batch for testing"""
     for images, labels in train_loader:
         return images, labels
     
 
 def compute_mean_std(root):
     """
-    Compute the mean and standard deviation of a dataset.
-    Args:
-        root: Root directory of the dataset, containing class subdirectories.
+    Compute the mean and standard deviation of the dataset
+    root: Root directory of the dataset, containing class subfolders
     """
-    tf = transforms.ToTensor()  # Convert images to tensors
+    tf = transforms.ToTensor()  # Convert image to tensor
     s1, s2, n = 0.0, 0.0, 0
     for cls in os.listdir(root):
         cls_path = os.path.join(root, cls)
@@ -172,18 +200,17 @@ def compute_mean_std(root):
     mean = s1 / n
     std = (s2 / n - mean**2)**0.5
     return mean, std
-    
-# ==================== Main Execution ====================
-if __name__ == "__main__":
 
+# ==================== Dataset Test Initialization ====================
+if __name__ == "__main__":
     print_data_info()
-    
-    # Load test data
+
+    # Test data loading
     images, labels = get_sample_batch()
     mean, std = compute_mean_std(train_data_path)
-    print(f"Training set mean: {mean:.3f}, Training set std: {std:.3f}")
+    print(f"Training Set Mean: {mean:.3f} Training Set Std: {std:.3f}")
     mean, std = compute_mean_std(test_data_path)
-    print(f"Testing set mean: {mean:.3f}, Testing set std: {std:.3f}")
-    print(f"Sample image shape: {images.shape}")
-    print(f"Sample label shape: {labels.shape}")
-    print(f"Image data range: {images.min():.3f} to {images.max():.3f}")
+    print(f"Test Set Mean: {mean:.3f} Test Set Std: {std:.3f}")
+    print(f"Sample Image Shape: {images.shape}")
+    print(f"Sample Label Shape: {labels.shape}")
+    print(f"Image Data Range: {images.min():.3f} to {images.max():.3f}")
