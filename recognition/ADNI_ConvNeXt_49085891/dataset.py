@@ -23,6 +23,7 @@ train_transform = transforms.Compose([
 test_transform = transforms.Compose([
     transforms.Resize(256, antialias=True),
     transforms.CenterCrop(256),
+])
 
 val_test_transform = transforms.Compose([
     transforms.Resize(224),
