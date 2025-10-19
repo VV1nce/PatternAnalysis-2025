@@ -26,7 +26,7 @@ class ConvNeXtBlock(nn.Module):
     (1) DwConv -> LayerNorm (channels_first) -> 1x1 Conv -> GELU -> 1x1 Conv; all in (N, C, H, W)
     (2) DwConv -> Permute to (N, H, W, C); LayerNorm (channels_last) -> Linear -> GELU -> Linear; Permute back
     
-    We use (2) as we find it slightly faster in PyTorch.
+    We use (2) as Facebook AI find it slightly faster in PyTorch.
     """
     def __init__(self, dim, drop_path=0., layer_scale_init_value=1e-6):
         super().__init__()
