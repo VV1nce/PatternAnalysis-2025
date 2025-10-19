@@ -3,7 +3,6 @@ from torch.utils.data import Dataset, DataLoader, Subset
 from torchvision import transforms
 import os
 from PIL import Image
-import random
 
 # File paths
 train_data_path = 'ADNI/AD_NC/train'  
@@ -17,12 +16,6 @@ train_transform = transforms.Compose([
     transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.116], std=[0.225]),
-])
-
-# Data preprocessing for validation and testing
-test_transform = transforms.Compose([
-    transforms.Resize(256, antialias=True),
-    transforms.CenterCrop(256),
 ])
 
 val_test_transform = transforms.Compose([
