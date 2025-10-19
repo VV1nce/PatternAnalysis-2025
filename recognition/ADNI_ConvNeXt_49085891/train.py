@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import LambdaLR
 from tqdm import tqdm
 from dataset import train_loader, val_loader, get_data_info
 from modules import convnext_small
@@ -11,6 +12,7 @@ EPOCHS = 50
 LEARNING_RATE = 1e-4
 WEIGHT_DECAY = 0.05
 CHECKPOINT_PATH = 'checkpoint_best.pth'
+WARMUP_EPOCHS = 5
 
 def train_one_epoch(model, loader, criterion, optimizer, device):
     model.train()
@@ -84,12 +86,21 @@ def main():
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
+    def lr_lambda(epoch):
+        if epoch < WARMUP_EPOCHS:
+            return (epoch + 1) / WARMUP_EPOCHS
+        return 0.5 * (1 + torch.cos(torch.tensor((epoch - WARMUP_EPOCHS) / (EPOCHS - WARMUP_EPOCHS) * 3.141592653589793)))
+
+    scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
+
     best_acc = 0.0
 
     for epoch in range(EPOCHS):
         print(f"\nEpoch {epoch + 1}/{EPOCHS}")
         train_one_epoch(model, train_loader, criterion, optimizer, DEVICE)
         val_loss, val_acc = validate(model, val_loader, criterion, DEVICE)
+
+        scheduler.step()
 
         if val_acc > best_acc:
             best_acc = val_acc
