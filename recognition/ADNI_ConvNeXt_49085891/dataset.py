@@ -1,13 +1,11 @@
 import os
 import json
 import random
+import numpy as np
 from typing import List, Tuple, Dict
 from PIL import Image
-
-import torch
 from torch.utils.data import Dataset, DataLoader, Subset
 from torchvision import transforms
-
 BATCH_SIZE = 32
 NUM_WORKERS = 64
 VAL_SPLIT = 0.2
@@ -15,15 +13,14 @@ TRAIN_DATA_PATH = 'ADNI/AD_NC/train'
 TEST_DATA_PATH = 'ADNI/AD_NC/test'
 META_PATH = 'ADNI/meta_data_with_label.json'  
 
+
 # Data augmentation and normalization for training
 train_transform = transforms.Compose([
-    transforms.RandomHorizontalFlip(p=0.3),
-    transforms.RandomVerticalFlip(p=0.3),
-    transforms.RandomRotation(30),
-    transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
+    transforms.RandomAffine(degrees=(-30,30), translate=(0.15, 0.15)),
     transforms.ColorJitter(brightness=0.2, contrast=0.2),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.116], std=[0.225]),
+    transforms.RandomErasing(p=0.25, scale=(0.1, 0.2), ratio=(0.3, 3.3), value='random'),
 ])
 
 val_test_transform = transforms.Compose([
@@ -32,6 +29,49 @@ val_test_transform = transforms.Compose([
 ])
 
 IMG_EXTS = ('.jpg', '.jpeg')
+
+def _load_meta_index(meta_json: str) -> Dict[str, str]:
+    """
+    Load meta_data_with_label.json and return {basename: patient_id} index.
+    Supports both list and dictionary structures, and tries to extract patient_id/path from common keys.
+    """
+    if not os.path.isfile(meta_json):
+        print(f"[WARN] Metadata not found: {meta_json}. Defaulting to grouping by filename, which may cause patient leakage.")
+        return {}
+
+    with open(meta_json, 'r', encoding='utf-8') as f:
+        meta = json.load(f)
+
+    index = {}
+    def pick(d: dict, keys: List[str], default=None):
+        for k in keys:
+            if k in d and d[k] is not None:
+                return d[k]
+        return default
+
+    if isinstance(meta, dict):
+        for k, v in meta.items():
+            if isinstance(v, dict):
+                pid = pick(v, ['patient_id', 'subject_id', 'pid', 'RID', 'sid'])
+                path = pick(v, ['path', 'filepath', 'image', 'img', 'filename'], k)
+            else:
+                pid = v
+                path = k
+            basename = os.path.basename(str(path))
+            index[basename] = str(pid) if pid is not None else None
+    elif isinstance(meta, list):
+        for item in meta:
+            if not isinstance(item, dict):
+                continue
+            pid = pick(item, ['patient_id', 'subject_id', 'pid', 'RID', 'sid'])
+            path = pick(item, ['path', 'filepath', 'image', 'img', 'filename'])
+            if path is None:
+                continue
+            basename = os.path.basename(str(path))
+            index[basename] = str(pid) if pid is not None else None
+    else:
+        print(f"[WARN] Unrecognized metadata structure: {type(meta)}. Defaulting to grouping by filename.")
+    return index
 
 def _load_meta_index(meta_json: str) -> Dict[str, str]:
     """
@@ -104,12 +144,38 @@ class CustomImageDataset(Dataset):
     def __len__(self):
         return len(self.samples)
 
-    def __getitem__(self, idx: int):
-        img_path, label = self.samples[idx]
-        img = Image.open(img_path).convert('L')
-        if self.transform:
-            img = self.transform(img)
-        return img, label
+@staticmethod
+def center_brain(img: Image.Image) -> Image.Image:
+    """
+    Crop the non-zero brain region to the center and resize it back to the original size.
+    img: PIL.Image, grayscale image
+    """
+    img_arr = np.array(img)
+    mask = img_arr > 0  # Non-zero region
+    if mask.any():
+        ys, xs = np.nonzero(mask)
+        y_min, y_max = ys.min(), ys.max()
+        x_min, x_max = xs.min(), xs.max()
+        brain_crop = img_arr[y_min:y_max+1, x_min:x_max+1]
+
+        # Resize back to the original size
+        brain_crop_img = Image.fromarray(brain_crop)
+        brain_crop_img = brain_crop_img.resize(img.size, Image.BILINEAR)
+        return brain_crop_img
+    else:
+        return img  # Return the original image if it's all zero
+
+def __getitem__(self, idx: int):
+    img_path, label = self.samples[idx]
+    img = Image.open(img_path).convert('L')
+
+    # Center the brain region
+    img = self.center_brain(img)
+
+    # Apply transformations
+    if self.transform:
+        img = self.transform(img)
+    return img, label
 
 def split_by_patient(dataset: CustomImageDataset, val_ratio=0.2, seed=42) -> Tuple[List[int], List[int]]:
     """
