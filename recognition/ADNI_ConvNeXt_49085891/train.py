@@ -13,6 +13,8 @@ LEARNING_RATE = 1e-4
 WEIGHT_DECAY = 0.05
 CHECKPOINT_PATH = 'checkpoint_best.pth'
 WARMUP_EPOCHS = 5
+GRAD_CLIP = 1.0
+
 
 def train_one_epoch(model, loader, criterion, optimizer, device):
     model.train()
@@ -29,6 +31,8 @@ def train_one_epoch(model, loader, criterion, optimizer, device):
 
         optimizer.zero_grad()
         loss.backward()
+
+        torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
         optimizer.step()
 
         running_loss += loss.item() * labels.size(0)
