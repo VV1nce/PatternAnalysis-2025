@@ -8,7 +8,7 @@ from torch.utils.data import Dataset, DataLoader, Subset
 from torchvision import transforms
 BATCH_SIZE = 32
 NUM_WORKERS = 64
-VAL_SPLIT = 0.2
+VAL_SPLIT = 0.3
 TRAIN_DATA_PATH = 'ADNI/AD_NC/train'
 TEST_DATA_PATH = 'ADNI/AD_NC/test'
 META_PATH = 'ADNI/meta_data_with_label.json'  
@@ -16,7 +16,7 @@ META_PATH = 'ADNI/meta_data_with_label.json'
 
 # Data augmentation and normalization for training
 train_transform = transforms.Compose([
-    transforms.RandomAffine(degrees=(-30,30), translate=(0.15, 0.15)),
+    transforms.RandomAffine(degrees=(-30,30), translate=(0.3, 0.3)),
     transforms.ColorJitter(brightness=0.2, contrast=0.2),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.116], std=[0.225]),
@@ -144,38 +144,41 @@ class CustomImageDataset(Dataset):
     def __len__(self):
         return len(self.samples)
 
-@staticmethod
-def center_brain(img: Image.Image) -> Image.Image:
-    """
-    Crop the non-zero brain region to the center and resize it back to the original size.
-    img: PIL.Image, grayscale image
-    """
-    img_arr = np.array(img)
-    mask = img_arr > 0  # Non-zero region
-    if mask.any():
-        ys, xs = np.nonzero(mask)
-        y_min, y_max = ys.min(), ys.max()
-        x_min, x_max = xs.min(), xs.max()
-        brain_crop = img_arr[y_min:y_max+1, x_min:x_max+1]
 
-        # Resize back to the original size
-        brain_crop_img = Image.fromarray(brain_crop)
-        brain_crop_img = brain_crop_img.resize(img.size, Image.BILINEAR)
-        return brain_crop_img
-    else:
-        return img  # Return the original image if it's all zero
+    def __getitem__(self, idx: int):
+        img_path, label = self.samples[idx]
+        img = Image.open(img_path).convert('L')
 
-def __getitem__(self, idx: int):
-    img_path, label = self.samples[idx]
-    img = Image.open(img_path).convert('L')
+        # Center the brain region
+        img = self.center_brain(img)
 
-    # Center the brain region
-    img = self.center_brain(img)
+        # Apply transformations
+        if self.transform:
+            img = self.transform(img)
+        return img, label
 
-    # Apply transformations
-    if self.transform:
-        img = self.transform(img)
-    return img, label
+    @staticmethod
+    def center_brain(img: Image.Image) -> Image.Image:
+        """
+        Crop the non-zero brain region to the center and resize it back to the original size.
+        img: PIL.Image, grayscale image
+        """
+        img_arr = np.array(img)
+        mask = img_arr > 0  # Non-zero region
+        if mask.any():
+            ys, xs = np.nonzero(mask)
+            y_min, y_max = ys.min(), ys.max()
+            x_min, x_max = xs.min(), xs.max()
+            brain_crop = img_arr[y_min:y_max+1, x_min:x_max+1]
+
+            # Resize back to the original size
+            brain_crop_img = Image.fromarray(brain_crop)
+            brain_crop_img = brain_crop_img.resize(img.size, Image.BILINEAR)
+            return brain_crop_img
+        else:
+            return img  # Return the original image if it's all zero
+
+
 
 def split_by_patient(dataset: CustomImageDataset, val_ratio=0.2, seed=42) -> Tuple[List[int], List[int]]:
     """
