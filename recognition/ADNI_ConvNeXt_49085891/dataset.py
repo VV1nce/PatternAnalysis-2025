@@ -11,7 +11,7 @@ from torch.utils.data import Dataset, DataLoader, Subset
 
 BATCH_SIZE = 32
 NUM_WORKERS = 16
-VAL_SPLIT = 0.2
+VAL_SPLIT = 0.1
 MEAN = 0.1177
 STD = 0.2220
 TRAIN_DATA_PATH = 'ADNI/AD_NC/train'
@@ -144,7 +144,7 @@ class CustomImageDataset(Dataset):
         max_side = max(cropped_img.size) # Place the cropped image at the center of the target size without changing the aspect ratio
         padded_square = ImageOps.pad(cropped_img, (max_side, max_side), color=0, centering=(0.5, 0.5))
         resized_img = padded_square.resize(target_size, Image.BILINEAR)
-        
+  
         return resized_img
 
     def __getitem__(self, idx: int):
