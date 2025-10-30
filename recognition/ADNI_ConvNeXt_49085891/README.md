@@ -168,6 +168,7 @@ A set of augmented images will be displayed. Or you can change input dataset loa
 ### Training conponents and Methods Used
 - Optimizer：AdamW (with label smooth)
 - loss function: CrossEntropyLoss
+- Drop path
 - Warmup
 - Cosine annealing learning rate
 - ~~Mixup~~
@@ -176,7 +177,7 @@ A set of augmented images will be displayed. Or you can change input dataset loa
 - Gradient Clipping
 - Early stopping
 
-I tried using the small and the base models, but they showed severe overfitting. As a result, I had to continue adjusting from the tiny model. Even in the tiny model, the overfitting issue remains very severe. As a result, I added early stop and EMA to maintain the eneralization ability and with large value of droppath and An accuracy test on the test set will be run after an early stop or after normal training. By my unique center barin, the gap between all sets to improve generalization ability hopefully reduced.
+I tried using the small and the base models, but they showed severe overfitting. As a result, I had to continue adjusting from the tiny model. Even in the tiny model, the overfitting issue of testset and validation set remains very severe. As a result, I added early stop and EMA to maintain the eneralization ability and with a large value of drop path. Then using ConvNeXt small to train the model. Testset will be validated after an early stop or after normal training. Through my unique center brain function, the gap between all sets hopefully reduced to improve generalization ability.
 ### Hyperparameters
 ```
 BATCH_SIZE = 32 (In dataset.py)
@@ -300,7 +301,7 @@ To reproduce this project, install the following dependencies:
 - tqdm: 4.67.1
 
 ## GPU device
-RTX3060 Laptop 6GB
+RTX3060 8GB
 
 ## Conclusion
 The ConvNeXt-based classifier achieved a test accuracy of 76.4% on the ADNI dataset. This demonstrates the effectiveness of modern convolutional architectures in medical image classification tasks, providing a solid foundation for further research and optimization.

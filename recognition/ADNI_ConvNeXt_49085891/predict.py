@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import random
 
 from dataset import test_loader, get_data_info   # Use existing test_loader
-from modules import convnext_small  # Keep the same model as training
+from modules import convnext_tiny, convnext_small  # Keep the same model as training
 
 
 CKPT_PATH = 'checkpoint_best.pth'     # Path to saved weights, if EMA used, trying 'checkpoint_best_ema.pth'
@@ -98,7 +98,7 @@ def main():
     print(f"Number of classes: {num_classes} | Class names: {class_names}")
 
     # Initialize model (must match training configuration)
-    model = convnext_small(num_classes=num_classes, in_chans=1).to(DEVICE)
+    model = convnext_small(num_classes=num_classes, in_chans=1).to(DEVICE) # Use the same model size as in training
 
     # Load checkpoint
     print(f"Loading checkpoint: {CKPT_PATH}")
