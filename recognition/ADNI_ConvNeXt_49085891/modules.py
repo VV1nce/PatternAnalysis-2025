@@ -14,7 +14,7 @@ class DropPath(nn.Module):
         if self.drop_prob == 0. or not self.training:
             return x
         keep_prob = 1 - self.drop_prob
-        shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # Works with tensors of different dimensions, not just 2D ConvNets
+        shape = (x.shape[0],) + (1,) * (x.ndim - 1)  
         random_tensor = keep_prob + torch.rand(shape, dtype=x.dtype, device=x.device)
         random_tensor.floor_()  # Binarize
         output = x.div(keep_prob) * random_tensor
@@ -171,14 +171,6 @@ def convnext_base(num_classes=2, in_chans=1, **kwargs):
     return model
 
 
-# Lightweight model for Alzheimer's disease classification
-def convnext_micro(num_classes=2, in_chans=1, **kwargs):
-    """ConvNeXt-Micro: Lightweight model suitable for medical image classification."""
-    model = ConvNeXt(depths=[2, 2, 6, 2], dims=[64, 128, 256, 512], 
-                     num_classes=num_classes, in_chans=in_chans, **kwargs)
-    return model
-
-
 # Test function
 def test_model():
     """Test if the model works correctly."""
@@ -207,7 +199,6 @@ if __name__ == "__main__":
     
     # Display the number of parameters for different models
     models = {
-        'ConvNeXt-Micro': convnext_micro(),
         'ConvNeXt-Tiny': convnext_tiny(),
         'ConvNeXt-Small': convnext_small(),
         'ConvNeXt-Base': convnext_base()
@@ -218,3 +209,9 @@ if __name__ == "__main__":
     for name, model in models.items():
         params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         print(f"{name}: {params:,} parameters")
+
+
+'''
+references: https://github.com/facebookresearch/ConvNeXt/tree/main
+by facebookresearch
+'''
