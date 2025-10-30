@@ -235,8 +235,8 @@ Total time taken: 311.19 mins
 Testset accuracy: 76.37%
 ============================================================
 ```
-Note: the “acc” value in logs refers to per-batch accuracy, not overall accuracy.   
-Test set will runs once after training. During the total of 150 epochs, training stopped at epoch 70 due to early stopping. At this point, the model achieved a final validation accuracy of 89.17%. The testset accyracy reaches 76.37%.
+Note: the “acc” value in logs refers to per-batch accuracy, not overall accuracy. Test set will runs once after training without using EMA weight. Just for reference.  
+During the total of 150 epochs, training stopped at epoch 70 due to early stopping. At this point, the model achieved a final validation accuracy of 89.17%. The testset accyracy reaches 76.37%.
 #### Loss and Accuracy
 <div style="display: flex; justify-content: center; align-items: center;">
     <img src="images/train_val_accuracy.png" alt="Train and Validation Accuracy" width="45%" style="margin-right: 10px;">
@@ -257,7 +257,7 @@ When the training loss continued to decrease, while the validation loss reached 
 ```
 python3 predict.py
 ```
-The variable NUM in `predict.py` can be modified to predict a different number of random samples. After execution, it will generate a terminal log that includes classification reprot then generate a confusion matix image. A prediction of ramdom selected will also generated. By changing `CKPT_PATH` in `predict.py`, original or EMA weight perform different. I selected `checkpoint_best.pth` here which have a better performace. The result in Training Log only uses 'checkpoint_best.pth'. The result may different if `checkpoint_best_ema.pth` selected in prediction.
+The variable NUM in `predict.py` can be modified to predict a different number of random samples. After execution, it will generate a terminal log that includes classification reprot then generate a confusion matix image. A prediction of ramdom selected will also generated. By changing `CKPT_PATH` in `predict.py`, original or EMA weight perform different. I selected `checkpoint_best.pth` this time which have a better performace. The result in Training Log only uses 'checkpoint_best.pth'. The result may different if `checkpoint_best_ema.pth` selected in prediction.
 ### Predict Results
 
 ![alt text](images/random_predictions.png)
