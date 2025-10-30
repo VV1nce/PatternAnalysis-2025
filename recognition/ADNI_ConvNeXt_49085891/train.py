@@ -299,7 +299,7 @@ def main():
     print(f'Using device: {device} | Number of classes: {num_classes}')
 
     # Model (Standard ConvNeXt setup: AdamW + DropPath + LabelSmoothing + CosineLR)
-    model = convnext_small(num_classes=num_classes, in_chans=1, drop_path_rate=DROP_PATH_RATE).to(device)
+    model = convnext_tiny(num_classes=num_classes, in_chans=1, drop_path_rate=DROP_PATH_RATE).to(device)
 
     criterion = nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING)
     optimizer = optim.AdamW(model.parameters(), lr=BASE_LR, weight_decay=WEIGHT_DECAY)
