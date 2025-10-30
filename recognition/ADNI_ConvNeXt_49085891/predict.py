@@ -1,113 +1,130 @@
 import torch
-import random
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from dataset import test_loader, get_data_info  # Import test dataset loader and data info function
-from modules import convnext_small, convnext_tiny, convnext_base  # Import model definitions
-import torch.nn as nn
+from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import numpy as np
+from sklearn.metrics import classification_report, confusion_matrix
+import matplotlib.pyplot as plt
+import random
 
-# ==================== Configuration ====================
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else
-                      'mps' if torch.backends.mps.is_available() else 'cpu')  # Select device (GPU, MPS, or CPU)
-CHECKPOINT_PATH = 'checkpoint_best.pth'  # Path to the model checkpoint
-NUM_EXAMPLES = 5  # Number of random examples to visualize
+from dataset import test_loader, get_data_info   # Use existing test_loader
+from modules import convnext_small  # Keep the same model as training
 
-# ==================== Validation Function ====================
+
+CKPT_PATH = 'checkpoint_best.pth'     # Path to saved weights, if EMA used, trying 'checkpoint_best_ema.pth'
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+NUM = 3  # Number of random samples to predict and visualize
+
+
 @torch.no_grad()
-def validate_and_visualize(model, loader, device, num_examples=5):
-    """
-    Validate the test dataset, randomly select a few images as examples, and generate a confusion matrix.
-    """
+def predict(model, loader, device):
+    """Predict on the entire test set."""
     model.eval()
-    all_preds = []
-    all_labels = []
-    example_images = []
-    example_preds = []
-    example_trues = []
-    example_confs = []
-
-    criterion = nn.CrossEntropyLoss()  # Loss function
-    pbar = tqdm(loader, desc='Testing')  # Progress bar for testing
+    all_preds, all_labels = [], []
+    pbar = tqdm(loader, desc='Predicting')
     for images, labels in pbar:
-        images, labels = images.to(device), labels.to(device)
-
-        # Forward pass
+        images = images.to(device)
+        labels = labels.to(device)
         outputs = model(images)
-        probs = torch.softmax(outputs, dim=1)  # Compute confidence scores
-        confs, preds = torch.max(probs, dim=1)
-
-        # Save all predictions and labels
+        _, preds = torch.max(outputs, 1)
         all_preds.extend(preds.cpu().numpy())
         all_labels.extend(labels.cpu().numpy())
+    return np.array(all_labels), np.array(all_preds)
 
-        # Randomly select examples
-        if len(example_images) < num_examples:
-            for i in range(images.size(0)):
-                if len(example_images) < num_examples:
-                    example_images.append(images[i].cpu())
-                    example_preds.append(preds[i].item())
-                    example_trues.append(labels[i].item())
-                    example_confs.append(confs[i].item())
-
-    # Generate confusion matrix
-    cm = confusion_matrix(all_labels, all_preds)
-    return cm, example_images, example_preds, example_trues, example_confs
-
-# ==================== Visualization Functions ====================
-def plot_examples(images, preds, trues, confs, class_names):
-    """
-    Visualize example images, showing predictions, ground truths, and confidence scores.
-    """
-    plt.figure(figsize=(15, 5))
-    for i, img in enumerate(images):
-        plt.subplot(1, len(images), i + 1)
-        img = img.permute(1, 2, 0).numpy()  # Convert to HWC format
-        plt.imshow(img, cmap='gray')
-        plt.axis('off')
-        plt.title(f"Pred: {class_names[preds[i]]}\nTrue: {class_names[trues[i]]}\nConf: {confs[i]:.2f}")
+def plot_confusion_matrix(y_true, y_pred, class_names):
+    """Plot and save confusion matrix using matplotlib only."""
+    cm = confusion_matrix(y_true, y_pred)
+    plt.figure(figsize=(6, 5))
+    plt.matshow(cm, cmap=plt.cm.Blues, fignum=1)
+    plt.colorbar()
+    for i in range(len(class_names)):
+        for j in range(len(class_names)):
+            plt.text(j, i, str(cm[i, j]),
+                     ha='center', va='center', color='red')
+    plt.xticks(range(len(class_names)), class_names)
+    plt.yticks(range(len(class_names)), class_names)
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.title('Confusion Matrix')
     plt.tight_layout()
-    plt.show()
+    plt.savefig('confusion_matrix.png')
+    plt.close()
 
-def plot_confusion_matrix(cm, class_names):
-    """
-    Plot the confusion matrix.
-    """
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=class_names, yticklabels=class_names)
-    plt.xlabel("Predicted")
-    plt.ylabel("True")
-    plt.title("Confusion Matrix")
-    plt.show()
 
-# ==================== Main Process ====================
+def predict_and_visualize_samples(model, dataset, num_samples, device, class_names):
+    """
+    Randomly select num_samples images, predict, and visualize in a grid if num_samples > 1.
+    """
+    model.eval()
+    total_samples = len(dataset)
+    indices = random.sample(range(total_samples), min(num_samples, total_samples))
+
+    print(f"\nRandomly selected {len(indices)} samples for prediction:")
+
+    # Prepare grid visualization
+    cols = min(num_samples, 5)
+    rows = (len(indices) + cols - 1) // cols
+    plt.figure(figsize=(4 * cols, 4 * rows))
+
+    for i, idx in enumerate(indices):
+        img, label = dataset[idx]
+        img_input = img.unsqueeze(0).to(device)
+        output = model(img_input)
+        _, pred = torch.max(output, 1)
+        pred = pred.item()
+
+        # Print true and predicted labels
+        print(f"Index {idx}: True = {class_names[label]}, Pred = {class_names[pred]}")
+
+        # Add subplot for the image
+        plt.subplot(rows, cols, i + 1)
+        if img.shape[0] == 1:  # Grayscale image
+            plt.imshow(img.squeeze(0), cmap='gray')
+        else:  # RGB image
+            plt.imshow(img.permute(1, 2, 0))
+        plt.title(f"True: {class_names[label]}\nPred: {class_names[pred]}")
+        plt.axis('off')
+
+    plt.tight_layout()
+    plt.savefig('random_predictions.png')
+    plt.show()
+    print("Random sample predictions saved as random_predictions.png")
+
+
 def main():
-    # Load dataset information
+    # Get class information
     data_info = get_data_info()
     num_classes = data_info['num_classes']
-    class_names = ['AD', 'NC']  # Manually define class names
-    print(f'Number of classes in the test set: {num_classes}')
+    class_names = ["AD", "NC"] if num_classes == 2 else [f"Class {i}" for i in range(num_classes)]
+    print(f"Number of classes: {num_classes} | Class names: {class_names}")
 
-    # Load the model
+    # Initialize model (must match training configuration)
     model = convnext_small(num_classes=num_classes, in_chans=1).to(DEVICE)
 
-    # Load model weights
-    checkpoint = torch.load(CHECKPOINT_PATH, map_location=DEVICE)
-    model.load_state_dict(checkpoint['model'])  # Load the 'model' key from the checkpoint
-    print(f'Successfully loaded weights: {CHECKPOINT_PATH}')
+    # Load checkpoint
+    print(f"Loading checkpoint: {CKPT_PATH}")
+    state_dict = torch.load(CKPT_PATH, map_location=DEVICE)
+    model.load_state_dict(state_dict)
+    print(" Weights loaded successfully")
 
-    # Validate the test set and get examples and confusion matrix
-    cm, example_images, example_preds, example_trues, example_confs = validate_and_visualize(
-        model, test_loader, DEVICE, num_examples=NUM_EXAMPLES
-    )
+    # Predict entire test set
+    y_true, y_pred = predict(model, test_loader, DEVICE)
 
-    # Visualize example images
-    plot_examples(example_images, example_preds, example_trues, example_confs, class_names)
+    # Print classification report
+    print("\nClassification Report:")
+    print(classification_report(y_true, y_pred, target_names=class_names, digits=4))
 
-    # Plot the confusion matrix
-    plot_confusion_matrix(cm, class_names)
+    # Plot confusion matrix
+    plot_confusion_matrix(y_true, y_pred, class_names)
+    print("Confusion matrix saved as confusion_matrix.png")
 
-if __name__ == '__main__':
+    # Calculate overall accuracy
+    acc = (y_true == y_pred).mean() * 100
+    print(f"\nTest set accuracy: {acc:.2f}%")
+
+    # Randomly sample and visualize
+    test_dataset = test_loader.dataset
+    predict_and_visualize_samples(model, test_dataset, NUM, DEVICE, class_names)
+
+
+if __name__ == "__main__":
     main()
